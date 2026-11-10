@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { daysBetween, trackEvent } from "../analytics/pendo";
 import { tripsApi, type NewTrip, type Trip } from "../api/trips";
 import { TripForm } from "../components/TripForm";
 
@@ -21,6 +22,16 @@ export function EditTripPage() {
     try {
       setError(null);
       await tripsApi.update(tripId, changes);
+      // A trip's changes were saved, with which fields changed from the loaded trip.
+      trackEvent("trip_updated", {
+        tripId,
+        destination: changes.destination,
+        travelers: changes.travelers,
+        tripLengthDays: daysBetween(changes.startDate, changes.endDate) + 1,
+        destinationChanged: trip?.destination !== changes.destination,
+        datesChanged: trip?.startDate !== changes.startDate || trip?.endDate !== changes.endDate,
+        travelersChanged: trip?.travelers !== changes.travelers,
+      });
       navigate("/trips");
     } catch (e) {
       setError((e as Error).message);
