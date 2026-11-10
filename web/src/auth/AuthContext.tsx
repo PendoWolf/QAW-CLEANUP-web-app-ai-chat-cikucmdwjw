@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { authApi, type Account, type User } from "../api/auth";
 import { clearSession, readSession, saveSession } from "./session";
 
@@ -29,6 +29,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       clearSession();
       setSession(null);
+      // Start a fresh anonymous Pendo visitor, so the next user isn't tracked as this one.
+      // clearSession isn't stubbed by the install snippet, so skip it if the agent never loaded.
+      pendo.clearSession?.();
     }
   }, []);
 
@@ -40,6 +43,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return updated;
     });
   }, []);
+
+  // Identify the signed-in user and their account to Pendo: on sign-in, on a reload that
+  // restores the stored session, and again when they edit their profile.
+  const user = session?.user;
+  const account = session?.account;
+  useEffect(() => {
+    if (!user || !account) return;
+    pendo.identify({
+      visitor: {
+        id: user.id,
+        email: user.email,
+        full_name: user.name,
+        role: user.role,
+        accountId: user.accountId,
+      },
+      account: {
+        id: account.id,
+        name: account.name,
+        plan: account.plan,
+      },
+    });
+  }, [user, account]);
 
   const value = useMemo<AuthState>(
     () => ({
